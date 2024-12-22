@@ -53,12 +53,17 @@ async def post_message(message: str = Form(...)):
         "message": f"Received message: {message} from server"
     }
 
-@app.post("/upload_file/")
-async def upload_file(file: UploadFile = File(...)):
-    response = JSONResponse(content={"message": "File uploaded successfully"})
+# Xử lý OPTIONS request (preflight request)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler():
+    response = JSONResponse(content={"message": "Preflight request"})
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+@app.post("/upload_file/")
+async def upload_file(file: UploadFile = File(...)):
     # Đọc nội dung file
     content = await file.read()
     
