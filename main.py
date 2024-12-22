@@ -18,10 +18,9 @@ app = FastAPI()
 
 # Cấu hình CORS
 origins = [
-    "http://localhost:5173",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
-    "http://127.0.0.1:5173",  # Địa chỉ IP nội bộ khi chạy trên localhost
-        "http://localhost:3000",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
-    "http://127.0.0.1:3000",  # Địa chỉ IP nội bộ khi chạy trên localhost
+    "http://localhost:3000",  # React app trên localhost
+    "https://web-production-a67e7.up.railway.app",  # URL ứng dụng đã deploy trên Railway
+    "http://127.0.0.1:3000",  # Địa chỉ nội bộ localhost
 ]
 
 # Thêm middleware CORS vào ứng dụng FastAPI
