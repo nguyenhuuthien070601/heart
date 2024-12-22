@@ -176,3 +176,5 @@ def most_frequent(percentage_dict):
     # Tìm phần tử xuất hiện nhiều nhất
     most_common_value = max(percentage_dict, key=percentage_dict.get)
     return most_common_value, percentage_dict[most_common_value]
+
+app.mount("/", StaticFiles(directory="heartsound", html=True))
