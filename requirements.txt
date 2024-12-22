@@ -5,7 +5,7 @@ pandas
 scikit-learn
 tensorflow==2.13
 keras==2.13.1
-opencv-python
+opencv-python-headless
 fastapi
 uvicorn
 python-multipart
