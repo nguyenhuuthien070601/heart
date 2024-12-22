@@ -1,13 +1,10 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-import os
 import numpy as np
 import librosa
 import librosa.display
 import cv2
 from tensorflow.keras.models import load_model
-import shutil
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -19,53 +16,40 @@ app.add_middleware(
     allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP
     allow_headers=["*"],  # Cho phép tất cả các header
 )
-app.mount("/", StaticFiles(directory="heartsound", html=True))
-# Thư mục tạm thời để lưu trữ file
-TEMP_DIRECTORY = "/tmp/uploads"
-
-# Tạo thư mục tạm nếu chưa tồn tại
-if not os.path.exists(TEMP_DIRECTORY):
-    os.makedirs(TEMP_DIRECTORY)
-
-@app.post("/upload/")
-async def upload_audio(file: UploadFile = File(...), description: str = Form(...)):
-    # Đường dẫn lưu file tạm thời
-    file_location = f"{TEMP_DIRECTORY}/{file.filename}"
-
-    # Lưu file vào thư mục tạm
-    with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Trả về thông tin sau khi upload
-    return {
-        "info": f"File '{file.filename}' has been saved temporarily.",
-        "description": description
-    }
 
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
-    # Đọc nội dung file
+    # Đọc nội dung file từ bộ nhớ
     content = await file.read()
 
-    # Lưu tạm file vào thư mục /tmp
-    file_path = os.path.join(TEMP_DIRECTORY, file.filename)
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # Tiền xử lý và phân tích nội dung âm thanh trực tiếp
+    try:
+        # Chuyển đổi nội dung byte thành dữ liệu âm thanh
+        audio, sr = librosa.load(librosa.util.buf_to_float(content), sr=4000, offset=0)
+    except Exception as e:
+        return {"error": "Error processing audio file.", "details": str(e)}
 
-    # Xử lý file ngay
-    results = detect(file_path)
+    # Tiền xử lý và dự đoán
+    duration = 2
+    time_limit = duration
+    x, y = get_data(audio, time_limit=time_limit, sr=sr)
 
-    # Xóa file sau khi xử lý xong
-    os.remove(file_path)
+    # Chuẩn bị dữ liệu dự đoán
+    x_test = np.concatenate([x, x, x], axis=-1)
 
-    # Phân tích kết quả
-    result = "Unknown"
+    # Tải mô hình và thực hiện dự đoán
+    model = load_model('model/final_model_DenseNet1691.h5')
+    predictions = model.predict(x_test)
+
+    # Xử lý kết quả dự đoán
+    results = [np.argmax(prediction) for prediction in predictions]
     count_dict = count_occurrences(results)
     total_count = len(results)
     percentage_dict = calculate_percentage(count_dict, total_count)
     most_common_value, percentage = most_frequent(percentage_dict)
 
-    print(f"Giá trị xuất hiện nhiều nhất là {most_common_value} với {percentage:.2f}% xuất hiện trong mảng.")
+    # Đặt kết quả dựa trên giá trị phổ biến nhất
+    result = "Unknown"
     if most_common_value == 0:
         result = "Absent"
     elif most_common_value == 1:
@@ -76,8 +60,8 @@ async def upload_file(file: UploadFile = File(...)):
         "percentage": f"{percentage:.2f}%"
     }
 
-# Hàm xử lý file và dự đoán (giữ nguyên như cũ)
-def get_data(name_files, audio, time_limit, sr):
+# Hàm xử lý file và dự đoán
+def get_data(audio, time_limit, sr):
     n_fft = 512
     n_mels = 128
     hop_length = 256
@@ -89,10 +73,8 @@ def get_data(name_files, audio, time_limit, sr):
         start_sample = i * segment_length
         end_sample = (i + 1) * segment_length
         segment = audio[start_sample:end_sample]
-        create_data(segment, n_fft, n_mels, hop_length)
-        label = 1
         x.append(create_data(segment, n_fft, n_mels, hop_length))
-        y.append(label)
+        y.append(1)  # Gán nhãn mặc định
     return x, y
 
 def create_data(audio, n_fft, n_mels, hop_length):
@@ -103,34 +85,6 @@ def create_data(audio, n_fft, n_mels, hop_length):
     mel_spectrogram_db = cv2.resize(mel_spectrogram_db, output_size[:2])
     mel_spectrogram_db = np.reshape(mel_spectrogram_db, output_size)
     return mel_spectrogram_db
-
-def detect(name_files):
-    duration = 2
-    time_limit = duration
-    sr = 4000
-    x_test = []
-
-    # Tải và tiền xử lý dữ liệu âm thanh
-    audio, sr = librosa.load(name_files, sr=sr, offset=0)
-    x, y = get_data(name_files, audio, time_limit=time_limit, sr=sr)
-
-    # Thêm dữ liệu vào x_test và nhân bản
-    x_test.extend(x)
-    x_test = np.concatenate([x_test, x_test, x_test], axis=-1)
-
-    # Tải mô hình và thực hiện dự đoán
-    model = load_model('model/final_model_DenseNet1691.h5')
-    predictions = model.predict(x_test)
-
-    # Lưu kết quả vào mảng results
-    results = []
-    for result in predictions:
-        print(np.argmax(result))
-        results.append(np.argmax(result))
-    print(results)
-
-    # Trả về kết quả
-    return results
 
 def count_occurrences(results):
     # Tạo dictionary để đếm số lần xuất hiện của mỗi phần tử
