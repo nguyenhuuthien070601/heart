@@ -67,38 +67,44 @@ async def preflight_handler():
 
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
-    # Đọc nội dung file
+    # Đọc nội dung file từ bộ nhớ
     content = await file.read()
-    
-    # Xác định đường dẫn lưu file
-    upload_directory = "uploaded_files"
-    if not os.path.exists(upload_directory):
-        os.makedirs(upload_directory) 
-    
-    file_path = os.path.join(upload_directory, file.filename)
-    
-    # Lưu file vào hệ thống
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    file_size = len(content)
-    results = detect(upload_directory + "/" + file.filename)
-    
-    result = "Unknown"
+
+    # Load dữ liệu âm thanh trực tiếp từ nội dung file
+    sr = 4000
+    duration = 2
+    time_limit = duration
+
+    # Dùng librosa để xử lý dữ liệu âm thanh từ content
+    try:
+        audio, _ = librosa.load(librosa.util.buf_to_float(content), sr=sr, offset=0)
+    except Exception as e:
+        return {"error": "Error processing audio file.", "details": str(e)}
+
+    # Tiền xử lý và dự đoán
+    x, y = get_data(file.filename, audio, time_limit=time_limit, sr=sr)
+    x_test = np.concatenate([x, x, x], axis=-1)
+
+    # Tải model và thực hiện dự đoán
+    model = load_model('model/final_model_DenseNet1691.h5')
+    predictions = model.predict(x_test)
+
+    # Xử lý kết quả dự đoán
+    results = [np.argmax(prediction) for prediction in predictions]
     count_dict = count_occurrences(results)
     total_count = len(results)
     percentage_dict = calculate_percentage(count_dict, total_count)
     most_common_value, percentage = most_frequent(percentage_dict)
-    
-    print(f"Giá trị xuất hiện nhiều nhất là {most_common_value} với {percentage:.2f}% xuất hiện trong mảng.")
+
+    result = "Unknown"
     if most_common_value == 0:
         result = "Absent"
     elif most_common_value == 1:
         result = "Present"
-    
+
     return {
         "results": result,
-        "percentage": f"{percentage:.2f}%"
+        "percentage": f"{percentage:.2f}%",
     }
 
 # Các hàm xử lý file và dự đoán (giữ nguyên như cũ)
