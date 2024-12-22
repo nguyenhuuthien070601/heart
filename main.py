@@ -1,16 +1,14 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import os
 import numpy as np
 import librosa
 import cv2
 from tensorflow.keras.models import load_model
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 
 app = FastAPI()
-
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,60 +17,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.mount("/", StaticFiles(directory="heartsound", html=True))
 
-# Sử dụng thư mục tạm thời `/tmp`
-TMP_DIRECTORY = "/tmp"
-
-# Tạo thư mục `/tmp` nếu chưa tồn tại (Railway thường đã có sẵn)
-if not os.path.exists(TMP_DIRECTORY):
-    os.makedirs(TMP_DIRECTORY)
-
-@app.post("/upload_file/")
+@app.post("/upload_file/" )
 async def upload_file(file: UploadFile = File(...)):
-    # Xác định đường dẫn file tạm
-    file_path = os.path.join(TMP_DIRECTORY, file.filename)
-
-    # Lưu file tạm vào thư mục `/tmp`
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-
     try:
-        # Gọi hàm detect để phân tích file tạm
-            results = detect(TMP_DIRECTORY + "/" + file.filename)
-    
-    finally:
-        # Xóa file tạm sau khi xử lý
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Đọc nội dung file trực tiếp từ UploadFile
+        content = await file.read()
 
-    if not results:
-        return {"results": "No results detected", "percentage": "N/A"}
+        # Chuyển nội dung file byte sang dữ liệu âm thanh
+        audio, sr = librosa.load(librosa.util.buf_to_float(content), sr=4000, offset=0)
 
-    # Phân tích kết quả
-    count_dict = count_occurrences(results)
-    total_count = len(results)
-    percentage_dict = calculate_percentage(count_dict, total_count)
-    most_common_value, percentage = most_frequent(percentage_dict)
+        # Gọi hàm detect để xử lý dữ liệu âm thanh
+        results = detect(audio, sr)
 
-    # Xác định kết quả dự đoán
-    result = "Unknown"
-    if most_common_value == 0:
-        result = "Absent"
-    elif most_common_value == 1:
-        result = "Present"
+        if not results:
+            return {"results": "No results detected", "percentage": "N/A"}
 
-    return {
-        "results": result,
-        "percentage": f"{percentage:.2f}%"
-    }
+        # Phân tích kết quả
+        count_dict = count_occurrences(results)
+        total_count = len(results)
+        percentage_dict = calculate_percentage(count_dict, total_count)
+        most_common_value, percentage = most_frequent(percentage_dict)
 
-def get_data(name_files, audio, time_limit, sr):
+        # Xác định kết quả dự đoán
+        result = "Unknown"
+        if most_common_value == 0:
+            result = "Absent"
+        elif most_common_value == 1:
+            result = "Present"
+
+        return {
+            "results": result,
+            "percentage": f"{percentage:.2f}%"
+        }
+
+    except Exception as e:
+        return {"error": f"Error processing file: {str(e)}"}
+
+def get_data(audio, time_limit, sr):
     n_fft = 512
     n_mels = 128
     hop_length = 256
     segment_length = time_limit * sr
-    num_segments = (len(audio) // segment_length)
+    num_segments = len(audio) // segment_length
     x = []
     for i in range(num_segments):
         start_sample = i * segment_length
@@ -90,15 +79,13 @@ def create_data(audio, n_fft, n_mels, hop_length):
     mel_spectrogram_db = np.reshape(mel_spectrogram_db, output_size)
     return mel_spectrogram_db
 
-def detect(file_path):
+def detect(audio, sr):
     duration = 2
-    sr = 4000
     x_test = []
 
     try:
-        # Tải và tiền xử lý dữ liệu âm thanh
-        audio, sr = librosa.load(file_path, sr=sr, offset=0)
-        x = get_data(file_path, audio, time_limit=duration, sr=sr)
+        # Tiền xử lý dữ liệu âm thanh
+        x = get_data(audio, time_limit=duration, sr=sr)
         x_test.extend(x)
         x_test = np.concatenate([x_test, x_test, x_test], axis=-1)
 
