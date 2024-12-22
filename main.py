@@ -1,7 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 import shutil
 import os
 import numpy as np
@@ -18,9 +16,17 @@ import numpy as np
 
 app = FastAPI()
 
+# Cấu hình CORS
 
+# Thêm middleware CORS vào ứng dụng FastAPI
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép các domain này truy cập
+    allow_credentials=True,  # Cho phép gửi cookie nếu cần
+    allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP (GET, POST, PUT, DELETE, ...)
+    allow_headers=["*"],  # Cho phép tất cả các header
+)
 
-app.mount("/", StaticFiles(directory="heartsound", html=True))
 # Directory to store uploaded files
 UPLOAD_DIRECTORY = "uploads"
 
@@ -47,9 +53,6 @@ async def post_message(message: str = Form(...)):
     return {
         "message": f"Received message: {message} from server"
     }
-
-
-
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
     # Đọc nội dung file từ bộ nhớ
@@ -91,6 +94,7 @@ async def upload_file(file: UploadFile = File(...)):
         "results": result,
         "percentage": f"{percentage:.2f}%",
     }
+
 
 # Các hàm xử lý file và dự đoán (giữ nguyên như cũ)
 def get_data(name_files, audio, time_limit, sr):
