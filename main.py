@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import shutil
 import os
 import numpy as np
@@ -15,13 +16,6 @@ from tensorflow.keras.models import load_model
 import numpy as np
 
 app = FastAPI()
-
-# Cấu hình CORS
-origins = [
-    "http://localhost:3000",  # React app trên localhost
-    "https://web-production-a67e7.up.railway.app",  # URL ứng dụng đã deploy trên Railway
-    "http://127.0.0.1:3000",  # Địa chỉ nội bộ localhost
-]
 
 # Thêm middleware CORS vào ứng dụng FastAPI
 app.add_middleware(
@@ -61,6 +55,10 @@ async def post_message(message: str = Form(...)):
 
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
+    response = JSONResponse(content={"message": "File uploaded successfully"})
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
     # Đọc nội dung file
     content = await file.read()
     
