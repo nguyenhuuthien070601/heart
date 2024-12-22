@@ -24,6 +24,7 @@ app.add_middleware(
     allow_credentials=True,  # Cho phép gửi cookie nếu cần
     allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP (GET, POST, PUT, DELETE, ...)
     allow_headers=["*"],  # Cho phép tất cả các header
+    expose_headers=["*"]
 )
 
 # Directory to store uploaded files
