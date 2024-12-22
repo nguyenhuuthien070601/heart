@@ -26,7 +26,7 @@ origins = [
 # Thêm middleware CORS vào ứng dụng FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Cho phép các domain này truy cập
+    allow_origins=["*"],  # Cho phép các domain này truy cập
     allow_credentials=True,  # Cho phép gửi cookie nếu cần
     allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP (GET, POST, PUT, DELETE, ...)
     allow_headers=["*"],  # Cho phép tất cả các header
