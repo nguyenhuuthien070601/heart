@@ -11,22 +11,30 @@ from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 from sklearn.preprocessing import LabelBinarizer
 import pickle
 import cv2
+from fastapi.staticfiles import StaticFiles
 from tensorflow.keras.models import load_model
 import numpy as np
 
 app = FastAPI()
 
 # Cấu hình CORS
+origins = [
+    "http://localhost:5173",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
+    "http://127.0.0.1:5173",  # Địa chỉ IP nội bộ khi chạy trên localhost
+        "http://localhost:3000",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
+    "http://127.0.0.1:3000",  # Địa chỉ IP nội bộ khi chạy trên localhost
+]
 
 # Thêm middleware CORS vào ứng dụng FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cho phép các domain này truy cập
+    allow_origins=origins,  # Cho phép các domain này truy cập
     allow_credentials=True,  # Cho phép gửi cookie nếu cần
     allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP (GET, POST, PUT, DELETE, ...)
     allow_headers=["*"],  # Cho phép tất cả các header
 )
 
+app.mount("/", StaticFiles(directory="heartsound", html=True))
 # Directory to store uploaded files
 UPLOAD_DIRECTORY = "uploads"
 
@@ -53,48 +61,31 @@ async def post_message(message: str = Form(...)):
     return {
         "message": f"Received message: {message} from server"
     }
+
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
-    # Đọc nội dung file từ bộ nhớ
+    # Đọc nội dung file
     content = await file.read()
+    
 
-    # Load dữ liệu âm thanh trực tiếp từ nội dung file
-    sr = 4000
-    duration = 2
-    time_limit = duration
-
-    # Dùng librosa để xử lý dữ liệu âm thanh từ content
-    try:
-        audio, _ = librosa.load(librosa.util.buf_to_float(content), sr=sr, offset=0)
-    except Exception as e:
-        return {"error": "Error processing audio file.", "details": str(e)}
-
-    # Tiền xử lý và dự đoán
-    x, y = get_data(file.filename, audio, time_limit=time_limit, sr=sr)
-    x_test = np.concatenate([x, x, x], axis=-1)
-
-    # Tải model và thực hiện dự đoán
-    model = load_model('model/final_model_DenseNet1691.h5')
-    predictions = model.predict(x_test)
-
-    # Xử lý kết quả dự đoán
-    results = [np.argmax(prediction) for prediction in predictions]
+    results = detect(content)
+    
+    result = "Unknown"
     count_dict = count_occurrences(results)
     total_count = len(results)
     percentage_dict = calculate_percentage(count_dict, total_count)
     most_common_value, percentage = most_frequent(percentage_dict)
-
-    result = "Unknown"
+    
+    print(f"Giá trị xuất hiện nhiều nhất là {most_common_value} với {percentage:.2f}% xuất hiện trong mảng.")
     if most_common_value == 0:
         result = "Absent"
     elif most_common_value == 1:
         result = "Present"
-
+    
     return {
         "results": result,
-        "percentage": f"{percentage:.2f}%",
+        "percentage": f"{percentage:.2f}%"
     }
-
 
 # Các hàm xử lý file và dự đoán (giữ nguyên như cũ)
 def get_data(name_files, audio, time_limit, sr):
@@ -124,15 +115,15 @@ def create_data(audio, n_fft, n_mels, hop_length):
     mel_spectrogram_db = np.reshape(mel_spectrogram_db, output_size)
     return mel_spectrogram_db
 
-def detect(name_files):
+def detect(file_content):
     duration = 2
     time_limit = duration
     sr = 4000
     x_test = []
     
-    # Tải và tiền xử lý dữ liệu âm thanh
-    audio, sr = librosa.load(name_files, sr=sr, offset=0)
-    x, y = get_data(name_files, audio, time_limit=time_limit, sr=sr)
+    # Tải và tiền xử lý dữ liệu âm thanh từ byte data
+    audio, sr = librosa.load(io.BytesIO(file_content), sr=sr, offset=0)
+    x, y = get_data("uploaded_file", audio, time_limit=time_limit, sr=sr)
     
     # Thêm dữ liệu vào x_test và nhân bản
     x_test.extend(x)
@@ -146,8 +137,8 @@ def detect(name_files):
     results = []
     for result in predictions:
         print(np.argmax(result))
-        results.extend([np.argmax(result)])  # Sửa từ axtend thành extend
-    print(results)
+        results.append(np.argmax(result))
+    
     # Trả về kết quả
     return results
 
