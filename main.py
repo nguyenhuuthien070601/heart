@@ -11,24 +11,18 @@ from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 from sklearn.preprocessing import LabelBinarizer
 import pickle
 import cv2
-from fastapi.staticfiles import StaticFiles
 from tensorflow.keras.models import load_model
 import numpy as np
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
-# Cấu hình CORS
-origins = [
-    "http://localhost:5173",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
-    "http://127.0.0.1:5173",  # Địa chỉ IP nội bộ khi chạy trên localhost
-        "http://localhost:3000",  # React app chạy trên localhost:5173 (hoặc thay đổi theo URL của bạn)
-    "http://127.0.0.1:3000",  # Địa chỉ IP nội bộ khi chạy trên localhost
-]
+
 
 # Thêm middleware CORS vào ứng dụng FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Cho phép các domain này truy cập
+    allow_origins=["*"],  # Cho phép các domain này truy cập
     allow_credentials=True,  # Cho phép gửi cookie nếu cần
     allow_methods=["*"],  # Cho phép tất cả các phương thức HTTP (GET, POST, PUT, DELETE, ...)
     allow_headers=["*"],  # Cho phép tất cả các header
@@ -67,8 +61,19 @@ async def upload_file(file: UploadFile = File(...)):
     # Đọc nội dung file
     content = await file.read()
     
-
-    results = detect(content)
+    # Xác định đường dẫn lưu file
+    upload_directory = "uploaded_files"
+    if not os.path.exists(upload_directory):
+        os.makedirs(upload_directory) 
+    
+    file_path = os.path.join(upload_directory, file.filename)
+    
+    # Lưu file vào hệ thống
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    file_size = len(content)
+    results = detect(upload_directory + "/" + file.filename)
     
     result = "Unknown"
     count_dict = count_occurrences(results)
@@ -115,15 +120,15 @@ def create_data(audio, n_fft, n_mels, hop_length):
     mel_spectrogram_db = np.reshape(mel_spectrogram_db, output_size)
     return mel_spectrogram_db
 
-def detect(file_content):
+def detect(name_files):
     duration = 2
     time_limit = duration
     sr = 4000
     x_test = []
     
-    # Tải và tiền xử lý dữ liệu âm thanh từ byte data
-    audio, sr = librosa.load(io.BytesIO(file_content), sr=sr, offset=0)
-    x, y = get_data("uploaded_file", audio, time_limit=time_limit, sr=sr)
+    # Tải và tiền xử lý dữ liệu âm thanh
+    audio, sr = librosa.load(name_files, sr=sr, offset=0)
+    x, y = get_data(name_files, audio, time_limit=time_limit, sr=sr)
     
     # Thêm dữ liệu vào x_test và nhân bản
     x_test.extend(x)
@@ -137,8 +142,8 @@ def detect(file_content):
     results = []
     for result in predictions:
         print(np.argmax(result))
-        results.append(np.argmax(result))
-    
+        results.extend([np.argmax(result)])  # Sửa từ axtend thành extend
+    print(results)
     # Trả về kết quả
     return results
 
